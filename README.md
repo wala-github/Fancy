@@ -2,10 +2,11 @@
 
 **Hybrid Network Inference for Microbiome Co-Abundance Analysis**
 
-Fancy infers microbial co-abundance networks by combining mutual information
-(via MRNET) and distance correlation into a single hybrid edge score. Bootstrap
-resampling provides frequency-based confidence, and a weighted scoring function
-ranks edges for downstream module analysis. Designed for metagenome-assembled
+Fancy (Frequency And Nonlinear Correlation hYbrid) infers microbial co-abundance
+networks by combining k-nearest neighbour mutual information (via MRNET) and 
+distance correlation into a single hybrid edge score. Bootstrap resampling 
+provides frequency-based confidence, and a weighted scoring function ranks 
+edges for downstream module analysis. Designed for metagenome-assembled
 genome (MAG) count tables.
 
 ## Installation
@@ -65,7 +66,7 @@ Fancy/
 library(Fancy)
 
 # Run the full pipeline on a CLR-normalised count table
-# (~10 minutes on the example data with 100 bootstraps and 4 CPUs;
+# (~15 minutes on the example data with 100 bootstraps and 4 CPUs;
 #  runtime scales with dataset size and number of bootstraps)
 result <- fancy(t(fancy_tiny_clr), n_bootstrap = 100, cpus = 4)
 
@@ -73,7 +74,8 @@ result <- fancy(t(fancy_tiny_clr), n_bootstrap = 100, cpus = 4)
 plot(result)
 
 # Export for Cytoscape
-export_cytoscape(result, file = "edges.tsv")
+data(fancy_tiny_taxonomy)
+export_cytoscape(result, fancy_tiny_taxonomy, file_prefix = "my_network")
 ```
 
 ## License
