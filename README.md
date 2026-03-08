@@ -67,7 +67,7 @@ library(Fancy)
 # Run the full pipeline on a CLR-normalised count table
 # (~10 minutes on the example data with 100 bootstraps and 4 CPUs;
 #  runtime scales with dataset size and number of bootstraps)
-result <- fancy(fancy_tiny_clr, n_bootstrap = 100, cpus = 4)
+result <- fancy(t(fancy_tiny_clr), n_bootstrap = 100, cpus = 4)
 
 # Inspect the result
 plot(result)
