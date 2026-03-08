@@ -1,0 +1,54 @@
+Package: Fancy
+Type: Package
+Title: Hybrid Network Inference for Microbiome Co-Abundance Analysis
+Version: 0.0.1
+Authors@R: person(
+    given = "Wanxin",
+    family = "Lai",
+    role = c("aut", "cre"),
+    email = "wanxin.graceca@gmail.com")
+URL: https://github.com/your-username/Fancy
+BugReports: https://github.com/your-username/Fancy/issues
+Description: Infers microbial co-abundance networks by combining mutual
+    information (via MRNET) and distance correlation into a single hybrid
+    edge score. Bootstrap resampling provides frequency-based confidence,
+    and a weighted scoring function ranks edges for downstream module
+    analysis. Designed for metagenome-assembled genome (MAG) count tables.
+License: GPL (>= 3)
+Encoding: UTF-8
+LazyData: false
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Depends:
+    R (>= 4.5.0)
+Imports:
+    minet,
+    compositions,
+    energy,
+    knnmi,
+    snowfall,
+    dplyr,
+    tidyr,
+    purrr,
+    readr,
+    rlang,
+    tibble,
+    stringr,
+    graphics,
+    stats,
+    utils
+Suggests:
+    BiocStyle,
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0),
+    ggplot2,
+    igraph,
+    magick
+biocViews:
+    NetworkInference,
+    Metagenomics,
+    Microbiome,
+    StatisticalMethod
+VignetteBuilder: knitr
+Config/testthat/edition: 3

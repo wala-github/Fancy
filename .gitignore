@@ -1,0 +1,15 @@
+.Rproj.user/
+.Rhistory
+.RData
+.httr-oauth
+.DS_Store
+.claude/
+*.tar.gz
+Fancy.Rcheck/
+src/*.o
+src/*.so
+src/*.dll
+SnowfallSlaveOutput*.txt
+/doc/
+/Meta/
+/sort/

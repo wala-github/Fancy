@@ -1,0 +1,613 @@
+---
+title: "Fancy: Hybrid Network Inference for Microbiome Co-Abundance Analysis"
+author: "Wanxin Lai"
+date: "`r Sys.Date()`"
+output:
+  BiocStyle::html_document:
+    toc: true
+    toc_depth: 3
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+    code_folding: hide
+vignette: >
+  %\VignetteIndexEntry{Fancy workflow}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  crop     = if (requireNamespace("magick", quietly = TRUE)) "magick" else NULL
+)
+```
+
+```{css custom-styles, echo=FALSE}
+h1, h2, h3, h4 { color: #404040; }
+h1 { border-bottom: 1px #404040 solid; }
+span.caption-title { color: #404040; }
+table {
+  margin-left: auto !important;
+  margin-right: auto !important;
+  float: none !important;
+}
+.formula-box {
+  padding: 15px 20px;
+  margin: 20px 0;
+  text-align: center;
+  font-size: 1.1em;
+}
+.formula-box .MathJax_Display {
+  margin: 0.5em 0 !important;
+}
+```
+
+# Introduction
+
+**Fancy** infers microbial co-abundance networks using a hybrid scoring
+framework that combines kNN-based mutual information (MI), MRNET edge
+selection, and distance correlation (dCor) within a bootstrap resampling
+loop. Each bootstrap iteration computes an MI matrix, applies MRNET for
+sparse edge selection, and independently computes pairwise dCor. The
+final hybrid score ranks edges by combining MRNET edge frequency with
+dCor stability across bootstraps.
+
+This hybrid approach captures **nonlinear** associations between MAGs,
+including threshold effects, competitive exclusion, and other ecological
+interactions that linear correlation measures miss.
+
+```{r load-library, message=FALSE}
+library(Fancy)
+```
+
+# Example Data
+
+Fancy ships with a dataset subset from a published cattle rumen
+metagenome study. The data contains **100 MAGs across 321 samples**
+with CLR-transformed abundances pre-computed on the full 2178-MAG
+compositional reference:
+
+- **MAGs 1-2**: Bulleidia vs AC2028 (both Bacillota), showing
+  threshold competitive exclusion
+- **MAGs 3-4**: RUG023 (Spirochaetota) vs Cryptobacteroides
+  (Bacteroidota), showing an L-shaped nonlinear relationship
+- **MAGs 5-100**: high-quality MAGs spanning 9 phyla
+
+```{r load-data}
+data(fancy_tiny_clr)
+data(fancy_tiny_counts)
+data(fancy_tiny_coverage)
+data(fancy_tiny_taxonomy)
+data(fancy_tiny_metadata)
+
+dim(fancy_tiny_clr)    # MAGs x samples (CLR-transformed)
+fancy_tiny_clr[1:5, 1:5]
+```
+
+The taxonomy spans 9 phyla:
+
+```{r phyla-barplot, fig.width=7, fig.height=4}
+phyla_counts <- sort(table(fancy_tiny_taxonomy$Phyla), decreasing = TRUE)
+par(mar = c(5, 10, 2, 1))
+barplot(phyla_counts, horiz = TRUE, las = 1,
+        col = phyla_palette(names(phyla_counts))[names(phyla_counts)],
+        xlab = "Number of MAGs", main = "Phyla Distribution")
+```
+
+## Coverage distribution
+
+Coverage values reflect real genome mapping fractions. Most MAGs in this
+subset have high coverage, as they were selected for genome quality
+(coverage >= 0.5 in >= 200 samples).
+
+```{r coverage-hist, fig.width=7, fig.height=4}
+cov_vals <- unlist(fancy_tiny_coverage)
+hist(cov_vals, breaks = 60, main = "Genome Coverage Distribution",
+     xlab = "Covered fraction", col = "steelblue", border = "white")
+abline(v = 0.3, col = "red", lwd = 2, lty = 2)
+text(0.32, par("usr")[4] * 0.85, "min_coverage = 0.3",
+     col = "red", cex = 0.8, pos = 4)
+cat("Fraction with coverage >= 0.3:", round(mean(cov_vals >= 0.3, na.rm = TRUE), 4), "\n")
+```
+
+## Metadata
+
+The metadata links each sample to methane emissions (CH4) and cattle
+breed.
+
+```{r metadata, fig.width=7, fig.height=4}
+head(fancy_tiny_metadata)
+hist(fancy_tiny_metadata$CH4, breaks = 15, main = "CH4 Emissions",
+     xlab = "CH4 (g/day)", col = "grey80", border = "white")
+```
+
+# Preparing the Network Input
+
+The shipped CLR matrix (`fancy_tiny_clr`) was computed on the full
+2178-MAG compositional reference, preserving the proper geometric mean.
+Network functions in Fancy expect **samples as rows, MAGs as columns**,
+so we transpose:
+
+```{r transpose}
+net_input <- t(fancy_tiny_clr)
+dim(net_input)  # samples x MAGs
+net_input[1:5, 1:5]
+```
+
+**Note:** If you are working with your own raw count data, run
+`filter_mags()` then `clr_normalize()` before transposing. The example
+data ships pre-CLR to avoid recomputing CLR on a reduced MAG set, which
+would distort the geometric mean.
+
+# Why a Hybrid Scoring Framework?
+
+Fancy combines two complementary approaches in a bootstrap framework:
+
+1. **Mutual information + MRNET**: kNN-based MI captures *all* types
+   of statistical dependencies (linear and nonlinear). MRNET then
+   sparsifies the MI network by removing indirect edges, retaining only
+   the most informative direct associations. The fraction of bootstrap
+   iterations in which MRNET selects an edge gives the **EdgeFrequency**.
+
+2. **Distance correlation (dCor)**: Computed independently in each
+   bootstrap iteration, dCor provides a second nonlinear dependency
+   measure. The ratio of mean dCor to its standard deviation across
+   bootstraps gives a **Stability** score, meaning edges with
+   consistently high dCor are more trustworthy.
+
+The final **HybridScore** ranks edges by combining both signals.
+Fancy offers two scoring modes:
+
+## Multiplicative scoring (default)
+
+<div class="formula-box">
+$$\text{HybridScore} \;=\; \text{EdgeFrequency}^{\,w_1} \;\times\; \text{Stability.dcor.scaled}^{\,w_2}$$
+</div>
+
+$w_1$ controls the weight on MRNET edge frequency and $w_2$ controls
+the weight on dCor stability (default $w_1 = 0.3$, $w_2 = 0.7$).
+Edges need support from **both** components: a near-zero value in
+either pulls the score toward zero.
+
+## Additive scoring
+
+<div class="formula-box">
+$$\text{HybridScore} \;=\; w_1 \times \text{EdgeFrequency} \;+\; w_2 \times \text{Stability.dcor.scaled}$$
+</div>
+
+Set `score_type = "additive"` in `fancy()` to use this mode. This
+allows edges with strong dCor but weak MRNET frequency (or vice versa)
+to retain a meaningful score — useful when users want purely
+dCor-discovered edges to carry weight.
+
+## dCor rescue (multiplicative mode)
+
+For multiplicative scoring, a `dcor_rescue_percentile` option is
+available (e.g. `dcor_rescue_percentile = 0.6`). Edges whose
+`Stability.dcor.scaled` exceeds the given percentile receive a minimum
+`EdgeFrequency` floor (the 30th percentile of non-zero EdgeFrequency
+values). This prevents MRNET from suppressing edges that dCor finds
+reliably — important for users who believe some associations are only
+detectable by dCor and not MI/MRNET.
+
+This hybrid approach captures nonlinear ecological interactions that
+Pearson or Spearman correlation would miss.
+
+# Running the Pipeline
+
+`fancy()` wraps the full pipeline: bootstrap network inference, edge
+scoring, and thresholding.
+
+| Parameter | Default | Suggested | Description |
+|-----------|---------|-----------|-------------|
+| `n_bootstrap` | 100 | 100 to 200 | Number of bootstrap iterations |
+| `k` | 5 | 3 to 7 | kNN parameter for MI estimation |
+| `find_k` | FALSE | TRUE for exploratory runs | Auto-select k via elbow method |
+| `cpus` | 4 | 2 to 8 | Number of parallel workers |
+| `use_mrnet` | TRUE | TRUE | Apply MRNET for sparse edge selection |
+| `w1` | 0.3 | 0.2 to 0.4 | Weight for edge frequency |
+| `w2` | 0.7 | 0.6 to 0.8 | Weight for dCor stability |
+| `threshold_method` | "quantile" | "quantile" or "top_n" | How to threshold edges |
+| `threshold_value` | 0.7 | 0.7 to 0.9 | Quantile cutoff (top 30 percent at 0.7) |
+
+We run **100 bootstrap iterations** here for meaningful hybrid scores.
+We set `cpus = 6L` for parallel processing and use the default 70th
+percentile threshold. Because this dataset contains high-quality MAGs
+subset from real data (100 MAGs, 321 samples), we use **equal weights**
+(`w1 = w2 = 0.5`) so that MRNET edge frequency and dCor stability
+contribute equally to the hybrid score.
+
+```{r run-fancy, message=FALSE}
+result <- fancy(
+  net_input,
+  n_bootstrap     = 100L,
+  k               = 3L,
+  cpus            = 6L,
+  w1              = 0.5,
+  w2              = 0.5,
+  threshold_method = "quantile",
+  threshold_value  = 0.7,
+  verbose          = TRUE
+)
+```
+
+# Inspecting Results
+
+The result is a list with class `"fancy"`:
+
+```{r structure}
+str(result, max.level = 1)
+cat("\nRetained edges:", nrow(result$edges), "\n")
+cat("Total scored edges:", nrow(result$all_edges), "\n")
+```
+
+With 100 MAGs there are `choose(100, 2)` = 4,950 possible pairwise
+edges. After bootstrap filtering (minimum EdgeFrequency and dCor
+stability), `r nrow(result$all_edges)` edges are scored. The 70th
+percentile threshold retains `r nrow(result$edges)` of these.
+
+Top 5 edges by hybrid score:
+
+```{r top-edges}
+top5 <- head(result$edges[order(-result$edges$HybridScore), ], 5)
+knitr::kable(as.data.frame(top5), digits = 3, row.names = FALSE)
+```
+
+## Diagnostic Table for Known Nonlinear Pairs
+
+The `all_edges_unfiltered` component contains all
+`r nrow(result$all_edges_unfiltered)` pairs with their intermediate
+metrics, including pairs that were dropped by the hard pre-filter.
+This is useful for inspecting known nonlinear pairs:
+
+```{r diagnostic-table}
+## Known nonlinear pairs (MAGs 1-4)
+pairs <- list(c("MAG_001", "MAG_002"), c("MAG_003", "MAG_004"))
+diag_rows <- lapply(pairs, function(p) {
+  uf <- result$all_edges_unfiltered
+  idx <- which((uf$source == p[1] & uf$target == p[2]) |
+               (uf$source == p[2] & uf$target == p[1]))
+  if (length(idx)) as.data.frame(uf[idx[1], ])
+})
+diag_df <- do.call(rbind, diag_rows)
+knitr::kable(
+  diag_df[, c("source", "target", "EdgeFrequency", "mean.dcor", "sd.dcor",
+              "Stability.dcor", "Stability.dcor.scaled", "HybridScore")],
+  digits = 3, row.names = FALSE,
+  caption = "Intermediate metrics for known nonlinear MAG pairs"
+)
+```
+
+The table shows where each pair sits: **EdgeFrequency** (how often
+MRNET selected the edge across bootstraps), **mean.dcor** and
+**sd.dcor** (dCor mean and variability), **Stability.dcor** (mean/sd
+ratio), and the final **HybridScore**. If a pair has EdgeFrequency
+below 0.3, it was dropped from `all_edges` by the hard pre-filter
+but remains visible here.
+
+```{r helper-functions, include=FALSE}
+## Helper: look up hybrid score for a MAG pair
+get_hybrid_score <- function(all_edges, mag1, mag2) {
+  idx <- which(
+    (all_edges$source == mag1 & all_edges$target == mag2) |
+    (all_edges$source == mag2 & all_edges$target == mag1)
+  )
+  if (length(idx) > 0) round(all_edges$HybridScore[idx[1]], 3) else NA
+}
+
+## CH4 colour mapping
+ch4_vals  <- fancy_tiny_metadata$CH4
+ch4_pal   <- colorRampPalette(c("dodgerblue", "gold", "firebrick"))(100)
+ch4_idx   <- as.integer(cut(ch4_vals, breaks = 100))
+ch4_cols  <- ch4_pal[ch4_idx]
+```
+
+# Edges Across Hybrid Score Bands
+
+The scatter plots below show pairs sampled across four hybrid score
+bands, annotated with hybrid scores and Pearson r. Note how edges with
+high hybrid scores can have weak Pearson r, indicating nonlinear
+dependencies that linear measures miss.
+
+```{r score-band-scatter, fig.width=6, fig.height=12.5}
+all_scored <- result$all_edges[order(-result$all_edges$HybridScore), ]
+
+## Define five score bands and sample 2 pairs from each
+bands <- list(
+  c(0.9, Inf),
+  c(0.6, 0.7),
+  c(0.45, 0.55),
+  c(0.3, 0.4),
+  c(0.1, 0.2)
+)
+band_labels <- c("~1.0", "0.6-0.7", "0.45-0.55", "0.3-0.4", "0.1-0.2")
+
+set.seed(42)
+show_pairs <- data.frame()
+for (b in seq_along(bands)) {
+  lo <- bands[[b]][1]
+  hi <- bands[[b]][2]
+  in_band <- all_scored[all_scored$HybridScore >= lo &
+                        all_scored$HybridScore < hi, ]
+  if (nrow(in_band) == 0) {
+    ## If exact band is empty, take the 2 closest edges to midpoint
+    mid <- (lo + hi) / 2
+    all_scored$dist_tmp <- abs(all_scored$HybridScore - mid)
+    in_band <- head(all_scored[order(all_scored$dist_tmp), ], 2)
+    all_scored$dist_tmp <- NULL
+  }
+
+  ## For mid bands (0.3-0.55): prefer low sd.dcor + weak Pearson r
+  ## For lowest band (0.1-0.2): prefer higher Pearson r to show that
+  ## linearly correlated pairs correctly receive low hybrid scores
+  if ((hi <= 0.55 && lo >= 0.3) && nrow(in_band) > 2) {
+    in_band$abs_r <- vapply(seq_len(nrow(in_band)), function(j) {
+      abs(cor(net_input[, in_band$source[j]],
+              net_input[, in_band$target[j]]))
+    }, numeric(1))
+    low_r <- in_band[in_band$abs_r < 0.4, ]
+    if (nrow(low_r) >= 2) {
+      low_r <- low_r[order(low_r$sd.dcor), ]
+      picked <- head(low_r, 2)
+    } else {
+      in_band <- in_band[order(in_band$sd.dcor), ]
+      picked <- head(in_band, 2)
+    }
+    picked$abs_r <- NULL
+  } else if (lo < 0.3 && nrow(in_band) > 2) {
+    in_band$abs_r <- vapply(seq_len(nrow(in_band)), function(j) {
+      abs(cor(net_input[, in_band$source[j]],
+              net_input[, in_band$target[j]]))
+    }, numeric(1))
+    ## Pick one pair with |r| > 0.5, one with |r| > 0.4
+    high_r <- in_band[order(-in_band$abs_r), ]
+    picked <- head(high_r[high_r$abs_r > 0.4, ], 2)
+    if (nrow(picked) < 2) picked <- head(high_r, 2)
+    picked$abs_r <- NULL
+  } else {
+    n_pick <- min(2, nrow(in_band))
+    picked <- in_band[sample(seq_len(nrow(in_band)), n_pick), ]
+  }
+
+  picked$band <- band_labels[b]
+  show_pairs <- rbind(show_pairs, picked)
+}
+
+par(mfrow = c(5, 2), mar = c(4, 4.5, 3, 1))
+for (i in seq_len(nrow(show_pairs))) {
+  s <- show_pairs$source[i]
+  t <- show_pairs$target[i]
+  hs <- round(show_pairs$HybridScore[i], 3)
+  band <- show_pairs$band[i]
+
+  s_genus <- fancy_tiny_taxonomy[s, "Genus"]
+  t_genus <- fancy_tiny_taxonomy[t, "Genus"]
+
+  xi <- net_input[, t]
+  yi <- net_input[, s]
+  cti <- cor.test(xi, yi)
+
+  plot(xi, yi,
+       xlab = paste0(t_genus, " (CLR)"),
+       ylab = paste0(s_genus, " (CLR)"),
+       main = paste0("Score ", band, ": ", s_genus, " vs ", t_genus),
+       pch = 19, col = adjustcolor(ch4_cols, 0.7), cex = 1.1)
+  legend("topright", bty = "n", cex = 0.9,
+         legend = c(
+           paste0("Hybrid = ", hs),
+           paste0("r = ", round(cti$estimate, 3),
+                  " (p = ", format.pval(cti$p.value, digits = 2), ")")
+         ))
+  if (i == 1) {
+    legend("bottomleft", bty = "n", cex = 0.8, title = "CH4",
+           legend = c("Low", "Mid", "High"),
+           pch = 19, col = c("dodgerblue", "gold", "firebrick"))
+  }
+}
+```
+
+As the score bands illustrate, the hybrid framework surfaces nonlinear
+patterns across a range of strengths. We recommend inspecting scatter
+plots for top-ranking edges to confirm the biological context before
+interpretation.
+
+# Nonlinear Interactions Fancy Captured
+
+MAGs 1-4 contain nonlinear associations. We plot their
+CLR-transformed abundances and annotate with the hybrid scores
+from the pipeline.
+
+```{r scatter-pair1, fig.width=4, fig.height=3.5}
+# ---- Pair 1: Threshold competitive exclusion (Bulleidia vs AC2028) ----
+x1 <- net_input[, "MAG_002"]
+y1 <- net_input[, "MAG_001"]
+ct1 <- cor.test(x1, y1)
+hs1 <- get_hybrid_score(result$all_edges_unfiltered, "MAG_001", "MAG_002")
+
+par(mar = c(4.5, 4.5, 3.5, 1))
+plot(x1, y1,
+     xlab = "AC2028 (CLR)",
+     ylab = "Bulleidia (CLR)",
+     main = "MAG_001 vs MAG_002\nThreshold Competitive Exclusion",
+     cex.main = 0.85, cex.axis = 0.75, cex.lab = 0.85,
+     pch = 19, col = adjustcolor(ch4_cols, 0.8), cex = 0.9)
+lo <- loess(y1 ~ x1, span = 0.75)
+ox <- order(x1)
+lines(x1[ox], predict(lo)[ox], col = "black", lwd = 2.5)
+
+legend("topright", bty = "n", cex = 0.75,
+       legend = c(
+         paste0("Pearson r = ", round(ct1$estimate, 3),
+                " (p = ", format.pval(ct1$p.value, digits = 2), ")"),
+         paste0("Hybrid score = ", hs1)
+       ))
+legend("bottomleft", bty = "n", cex = 0.7, title = "CH4 (g/day)",
+       legend = c("Low", "Mid", "High"),
+       pch = 19, col = c("dodgerblue", "gold", "firebrick"))
+```
+
+```{r scatter-pair2, fig.width=4, fig.height=3.5}
+# ---- Pair 2: L-shaped relationship (RUG023 vs Cryptobacteroides) ----
+x2 <- net_input[, "MAG_004"]
+y2 <- net_input[, "MAG_003"]
+ct2 <- cor.test(x2, y2)
+hs2 <- get_hybrid_score(result$all_edges_unfiltered, "MAG_003", "MAG_004")
+
+par(mar = c(4.5, 4.5, 3.5, 1))
+plot(x2, y2,
+     xlab = "Cryptobacteroides (CLR)",
+     ylab = "RUG023 (CLR)",
+     main = "MAG_003 vs MAG_004\nL-Shaped Nonlinear Relationship",
+     cex.main = 0.85, cex.axis = 0.75, cex.lab = 0.85,
+     pch = 19, col = adjustcolor(ch4_cols, 0.8), cex = 0.9)
+
+legend("topright", bty = "n", cex = 0.75,
+       legend = c(
+         paste0("Pearson r = ", round(ct2$estimate, 3),
+                " (p = ", format.pval(ct2$p.value, digits = 2), ")"),
+         paste0("Hybrid score = ", hs2)
+       ))
+legend("bottomleft", bty = "n", cex = 0.7, title = "CH4 (g/day)",
+       legend = c("Low", "Mid", "High"),
+       pch = 19, col = c("dodgerblue", "gold", "firebrick"))
+```
+
+Both interactions have weak Pearson correlations, yet the underlying
+biological dependencies are clear. Note that the L-shaped pair
+(MAG_003 vs MAG_004) is **lost from the final network** because its
+EdgeFrequency falls below the hard hybrid cut-off of 0.3 — MRNET does
+not consistently select it across bootstraps, even though dCor captures
+the pattern reliably. This is a deliberate trade-off: the multiplicative
+hybrid formula prioritises edges supported by **both** MI/MRNET and
+dCor, favouring robustness over sensitivity. Purely nonlinear
+associations that MI misses can still be found by inspecting
+`all_edges_unfiltered` sorted by `Stability.dcor.scaled`. Users who
+prefer dCor-discovered edges to be retained can use
+`score_type = "additive"` (where strong dCor alone carries a meaningful
+score) or set `dcor_rescue_percentile` (e.g. 0.6) to give high-stability
+edges a minimum EdgeFrequency floor in the multiplicative formula.
+
+# Re-thresholding
+
+`threshold_edges()` re-thresholds the full scored edge list without
+re-running the bootstrap. This is useful for exploring different
+stringency levels.
+
+| Parameter | Default | Suggested | Description |
+|-----------|---------|-----------|-------------|
+| `method` | "quantile" | "quantile" or "top_n" | Thresholding strategy |
+| `value` | 0.8 | 0.7 to 0.9 for quantile; 10 to 50 for top_n | Cutoff value |
+
+```{r rethreshold}
+strict <- threshold_edges(result$all_edges, method = "quantile", value = 0.8)
+cat("Edges at 80th percentile:", nrow(strict), "\n")
+```
+
+# Score Distribution
+
+The S3 `plot()` method shows the hybrid score distribution with the
+threshold cutoff marked.
+
+```{r plot-fancy, fig.width=7, fig.height=5}
+plot(result)
+```
+
+# Taxonomy Annotation
+
+Merge taxonomy onto edges to see which lineages are co-abundant.
+
+```{r annotate}
+edges <- result$edges
+
+# Add source taxonomy
+edges <- merge(edges, fancy_tiny_taxonomy[, c("Genus", "Phyla")],
+               by.x = "source", by.y = "row.names", all.x = TRUE)
+names(edges)[names(edges) == "Genus"] <- "source_Genus"
+names(edges)[names(edges) == "Phyla"] <- "source_Phyla"
+
+# Add target taxonomy
+edges <- merge(edges, fancy_tiny_taxonomy[, c("Genus", "Phyla")],
+               by.x = "target", by.y = "row.names", all.x = TRUE)
+names(edges)[names(edges) == "Genus"] <- "target_Genus"
+names(edges)[names(edges) == "Phyla"] <- "target_Phyla"
+
+head(edges[order(-edges$HybridScore),
+     c("source_Genus", "target_Genus", "source_Phyla", "target_Phyla",
+       "HybridScore")], 15)
+```
+
+# Network Visualization
+
+If `igraph` is installed, `plot_network()` draws the co-abundance network
+with nodes coloured by phylum and edges weighted by HybridScore.
+Communities are detected using modularity-based clustering (analogous
+to GLay in Cytoscape). Shaded regions group MAGs that co-occur more
+frequently with each other than with MAGs outside their cluster.
+
+```{r plot-network, fig.width=9, fig.height=9, eval=requireNamespace("igraph", quietly=TRUE)}
+plot_network(result, fancy_tiny_taxonomy, community = TRUE)
+```
+
+# Exporting for Cytoscape
+
+`export_cytoscape()` writes node and edge tables as tab-separated files
+that Cytoscape can import directly.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `fancy_result` | | Object of class `"fancy"` |
+| `taxonomy` | | Data.frame with MAG IDs as rownames, must have `Phyla` column |
+| `file_prefix` | "fancy_network" | Path prefix for output TSV files |
+| `edges` | "thresholded" | Which edges: `"thresholded"` or `"all"` |
+
+```{r export-build, eval=TRUE}
+cyto <- export_cytoscape(
+  result,
+  fancy_tiny_taxonomy,
+  file_prefix = tempfile("fancy")
+)
+```
+
+The returned list contains the same data.frames that were written to
+disk:
+
+```{r export-edges}
+head(cyto$edges)
+```
+
+```{r export-nodes}
+head(cyto$nodes)
+```
+
+To import into Cytoscape:
+
+1. **File > Import > Network from File**: select the `*_edges.tsv` file.
+   Map `source` to Source Node, `target` to Target Node, and
+   `HybridScore` to an edge attribute.
+2. **File > Import > Table from File**: select the `*_nodes.tsv` file.
+   Map the `id` column to the node key column.
+3. Use the `Color` column in the node table to set node fill colour by
+   mapping it as a passthrough in the Style panel.
+4. **Apps > Community Detection (GLay)** to run GLay community
+   clustering on the network.
+
+# Saving Results
+
+To save all pipeline and intermediate objects for later use without
+re-running the bootstrap:
+
+```{r save-objects, eval=TRUE}
+save(result, net_input,
+     fancy_tiny_clr, fancy_tiny_counts, fancy_tiny_coverage,
+     fancy_tiny_taxonomy, fancy_tiny_metadata,
+     all_scored, show_pairs, diag_df, edges, top5, strict,
+     file = "vignette_objects.RData")
+```
+
+# Session Info
+
+```{r session-info}
+sessionInfo()
+```

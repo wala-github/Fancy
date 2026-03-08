@@ -1,0 +1,67 @@
+# IDE / tooling
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.claude$
+
+# Analysis subdirectory
+^Simplified$
+^sort$
+
+# Planning / notes
+^PACKAGING_PLAN\.md$
+^movefiles\.sh$
+^_combined\.modified\.faa$
+^combined\.modified\.txt$
+
+# Numbered analysis Rmd scripts
+^01_
+^02_
+^05_
+^06[_-]
+^07_
+^09_
+^81_
+
+# Top-level data files by extension (root-anchored)
+^[^/]*\.RData$
+^\.RData$
+^[^/]*\.Rhistory$
+^\.Rhistory$
+^[^/]*\.rds$
+^[^/]*\.csv
+^[^/]*\.tsv$
+^[^/]*\.txt$
+^[^/]*\.tar\.gz$
+^[^/]*\.pptx$
+^[^/]*\.pdf$
+^[^/]*\.png$
+^[^/]*\.jpeg$
+^[^/]*\.html$
+^[^/]*\.faa$
+^[^/]*\.sif$
+^[^/]*\.cys$
+
+# Data generation script (not shipped)
+^data-raw$
+
+# Package map (documentation, not shipped)
+^PACKAGE_MAP\.md$
+^PACKAGE_MAP\.Rmd$
+^PACKAGE_MAP\.pdf$
+^PACKAGE_MAP\.html$
+^PACKAGE_MAP\.tex$
+
+# Reference images and rendered vignette output
+^To_refer$
+^Fancy_workflow_files$
+
+# Standard ignores
+^LICENSE\.md$
+^\.gitignore$
+^\.git$
+^\.github$
+^mashtree$
+^Greg_Glay_syto_deposit$
+^count_table_for_wanxin$
+^doc$
+^Meta$
