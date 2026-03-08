@@ -37,10 +37,12 @@ into Cytoscape. The node table includes taxonomy columns and a hex
 colour derived from \code{\link[=phyla_palette]{phyla_palette()}}.
 }
 \examples{
-\dontrun{
-result <- fancy(t(clr_mat), n_bootstrap = 100)
+\donttest{
+data(fancy_tiny_clr)
 data(fancy_tiny_taxonomy)
-out <- export_cytoscape(result, fancy_tiny_taxonomy, "my_network")
+result <- fancy(t(fancy_tiny_clr), n_bootstrap = 2, cpus = 1)
+out <- export_cytoscape(result, fancy_tiny_taxonomy,
+                        file_prefix = file.path(tempdir(), "fancy_net"))
 head(out$edges)
 head(out$nodes)
 }

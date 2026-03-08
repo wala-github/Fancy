@@ -59,17 +59,11 @@ near-zero MRNET frequency from suppressing edges that dCor finds
 reliably.
 }
 \examples{
-\dontrun{
-# Multiplicative (default)
-scored <- hybrid_score(edge_metrics, w1 = 0.3, w2 = 0.7)
-
-# Additive
-scored <- hybrid_score(edge_metrics, w1 = 0.5, w2 = 0.5,
-                       score_type = "additive")
-
-# Multiplicative with dCor rescue
-scored <- hybrid_score(edge_metrics, w1 = 0.5, w2 = 0.5,
-                       dcor_rescue_percentile = 0.6)
+\donttest{
+data(fancy_tiny_clr)
+result <- fancy(t(fancy_tiny_clr), n_bootstrap = 2, cpus = 1)
+scored <- hybrid_score(result$all_edges, w1 = 0.3, w2 = 0.7)
+head(scored)
 }
 
 }

@@ -20,8 +20,9 @@ Takes the list returned by \code{\link[=find_optimal_k]{find_optimal_k()}} and p
 a distinct symbol and label.
 }
 \examples{
-\dontrun{
-k_res <- find_optimal_k(t(clr_mat))
+\donttest{
+data(fancy_tiny_clr)
+k_res <- find_optimal_k(t(fancy_tiny_clr), k_values = c(3L, 5L), cpus = 1)
 plot_k_elbow(k_res)
 }
 

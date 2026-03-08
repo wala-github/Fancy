@@ -8,8 +8,16 @@
 \description{
 Infers microbial co-abundance networks by combining mutual information (via MRNET) and distance correlation into a single hybrid edge score. Bootstrap resampling provides frequency-based confidence, and a weighted scoring function ranks edges for downstream module analysis. Designed for metagenome-assembled genome (MAG) count tables.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/wala-github/Fancy}
+  \item Report bugs at \url{https://github.com/wala-github/Fancy/issues}
+}
+
+}
 \author{
-\strong{Maintainer}: Wanxin Lai \email{wanxin.graceca@gmail.com}
+\strong{Maintainer}: Wanxin Lai \email{wanxin.graceca@gmail.com} (\href{https://orcid.org/0009-0000-1607-2453}{ORCID})
 
 }
 \keyword{internal}

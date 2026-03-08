@@ -42,9 +42,9 @@ networks, and returns edge lists. Results are collected into a single
 named list.
 }
 \examples{
-\dontrun{
-clr_t <- t(clr_normalize(counts))
-res <- bootstrap_networks(clr_t, n_bootstrap = 100, k = 5L)
+\donttest{
+data(fancy_tiny_clr)
+res <- bootstrap_networks(t(fancy_tiny_clr), n_bootstrap = 2, k = 5L, cpus = 1)
 }
 
 }

@@ -54,6 +54,11 @@
 # Reference images and rendered vignette output
 ^To_refer$
 ^Fancy_workflow_files$
+^vignettes/vignette_objects\.RData$
+
+# Documentation not shipped in tarball
+^README\.md$
+^NEWS\.md$
 
 # Standard ignores
 ^LICENSE\.md$

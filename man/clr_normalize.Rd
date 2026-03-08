@@ -29,9 +29,12 @@ references \code{clr_transform_df}.  The saved RData was renamed at some
 point; this function's output corresponds to both names.
 }
 \examples{
-\dontrun{
-filt <- filter_mags(count, coverage)
+\donttest{
+data(fancy_tiny_counts)
+data(fancy_tiny_coverage)
+filt <- filter_mags(fancy_tiny_counts, fancy_tiny_coverage)
 clr_df <- clr_normalize(filt)
+dim(clr_df)
 }
 
 }

@@ -20,8 +20,9 @@ S3 plot method for objects returned by \code{\link[=fancy]{fancy()}}. Draws a hi
 threshold cutoff. The number of retained edges is annotated.
 }
 \examples{
-\dontrun{
-result <- fancy(t(clr_mat), n_bootstrap = 100)
+\donttest{
+data(fancy_tiny_clr)
+result <- fancy(t(fancy_tiny_clr), n_bootstrap = 2, cpus = 1)
 plot(result)
 }
 

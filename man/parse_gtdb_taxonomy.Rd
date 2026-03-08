@@ -35,7 +35,7 @@ When \code{fill_missing = TRUE} (the default):
 }
 }
 \examples{
-\dontrun{
+\donttest{
 tax <- parse_gtdb_taxonomy("taxonomy.MAGS.2.tsv")
 head(tax)
 }

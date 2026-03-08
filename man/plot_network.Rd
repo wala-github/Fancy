@@ -40,10 +40,10 @@ modularity-based community detection is applied and clusters are shown
 as shaded convex hulls around groups of co-abundant MAGs.
 }
 \examples{
-\dontrun{
-result <- fancy(t(clr_mat), n_bootstrap = 100)
+\donttest{
+data(fancy_tiny_clr)
 data(fancy_tiny_taxonomy)
+result <- fancy(t(fancy_tiny_clr), n_bootstrap = 2, cpus = 1)
 plot_network(result, fancy_tiny_taxonomy)
-plot_network(result, fancy_tiny_taxonomy, community = TRUE)
 }
 }

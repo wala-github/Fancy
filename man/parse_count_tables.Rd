@@ -44,7 +44,7 @@ first row in the raw files is often a duplicated header and is dropped by
 default (\code{drop_first_row = TRUE}).
 }
 \examples{
-\dontrun{
+\donttest{
 tables <- parse_count_tables("path/to/tsv_dir")
 count   <- tables$count
 cov_frac <- tables$covered_fraction

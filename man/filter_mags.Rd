@@ -40,9 +40,11 @@ on line 111, but the variable was actually \code{count_table_cov_stats}
 This function eliminates that confusion.
 }
 \examples{
-\dontrun{
-tables <- parse_count_tables("tsv_dir")
-filt   <- filter_mags(tables$count, tables$covered_fraction)
+\donttest{
+data(fancy_tiny_counts)
+data(fancy_tiny_coverage)
+filt <- filter_mags(fancy_tiny_counts, fancy_tiny_coverage)
+dim(filt)
 }
 
 }

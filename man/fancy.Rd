@@ -87,10 +87,9 @@ distance correlation with bootstrap resampling to produce a ranked,
 thresholded edge list.
 }
 \examples{
-\dontrun{
-counts <- parse_count_tables("path/to/counts")
-clr_mat <- clr_normalize(counts)
-result <- fancy(t(clr_mat), n_bootstrap = 100, k = 5, cpus = 4)
+\donttest{
+data(fancy_tiny_clr)
+result <- fancy(t(fancy_tiny_clr), n_bootstrap = 2, cpus = 1)
 head(result$edges)
 plot(result)
 }
