@@ -87,6 +87,7 @@ library(Fancy)
 result <- fancy(t(fancy_tiny_clr), n_bootstrap = 100, cpus = 4)
 
 # Inspect the result
+# Show the hybrid score distribution
 plot(result)
 
 # Export for Cytoscape
