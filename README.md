@@ -1,13 +1,15 @@
 # Fancy
 
-**Hybrid Network Inference for Microbiome Co-Abundance Analysis**
+**Frequency and Nonlinear Correlation Hybrid Network Inference**
 
-Fancy (Frequency And Nonlinear Correlation hYbrid) infers microbial co-abundance
-networks by combining k-nearest neighbour mutual information (via MRNET) and 
-distance correlation into a single hybrid edge score. Bootstrap resampling 
-provides frequency-based confidence, and a weighted scoring function ranks 
-edges for downstream module analysis. Designed for metagenome-assembled
-genome (MAG) count tables.
+Fancy (Frequency And Nonlinear Correlation hYbrid) infers association
+networks by combining k-nearest neighbour mutual information (via MRNET) and
+distance correlation into a single hybrid edge score. Bootstrap resampling
+provides frequency-based confidence, and a weighted scoring function ranks
+edges for downstream module analysis. While designed for microbial
+co-abundance networks from metagenome-assembled genome (MAG) count tables,
+Fancy works with any numeric feature matrix — including gene co-expression,
+metabolite correlations, and cross-omics (e.g. gene-metabolite) associations.
 
 ## Installation
 
