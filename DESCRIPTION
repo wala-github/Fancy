@@ -1,6 +1,6 @@
 Package: Fancy
 Type: Package
-Title: Hybrid Network Inference for Microbiome Co-Abundance Analysis
+Title: Frequency and Nonlinear Correlation Hybrid Network Inference
 Version: 0.99.0
 Authors@R: person(
     given = "Wanxin",
@@ -19,7 +19,7 @@ License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 Depends:
     R (>= 4.5.0)
 Imports:

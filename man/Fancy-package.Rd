@@ -4,7 +4,7 @@
 \name{Fancy-package}
 \alias{Fancy}
 \alias{Fancy-package}
-\title{Fancy: Hybrid Network Inference for Microbiome Co-Abundance Analysis}
+\title{Fancy: Frequency and Nonlinear Correlation Hybrid Network Inference}
 \description{
 Infers microbial co-abundance networks by combining mutual information (via MRNET) and distance correlation into a single hybrid edge score. Bootstrap resampling provides frequency-based confidence, and a weighted scoring function ranks edges for downstream module analysis. Designed for metagenome-assembled genome (MAG) count tables.
 }
