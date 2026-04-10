@@ -1,7 +1,7 @@
 Package: Fancy
 Type: Package
 Title: Hybrid Network Inference for Microbiome Co-Abundance Analysis
-Version: 0.0.1
+Version: 0.99.0
 Authors@R: person(
     given = "Wanxin",
     family = "Lai",
