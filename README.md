@@ -100,3 +100,10 @@ export_cytoscape(result, fancy_tiny_taxonomy, file_prefix = "my_network")
 ## License
 
 GPL (>= 3)
+
+## Citation
+
+If you use this software, please cite:
+
+Fancy v0.99.0  
+DOI: https://doi.org/10.5281/zenodo.20003547
