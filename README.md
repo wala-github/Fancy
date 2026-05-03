@@ -8,7 +8,7 @@ distance correlation into a single hybrid edge score. Bootstrap resampling
 provides frequency-based confidence, and a weighted scoring function ranks
 edges for downstream module analysis. While designed for microbial
 co-abundance networks from metagenome-assembled genome (MAG) count tables,
-Fancy works with any numeric feature matrix — including gene co-expression,
+Fancy works with any numeric feature matrix, including gene co-expression,
 metabolite correlations, and cross-omics (e.g. gene-metabolite) associations.
 
 ## Installation
